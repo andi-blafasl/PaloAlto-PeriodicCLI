@@ -1,0 +1,234 @@
+/*
+ * this Terra Term Macro executes the list of commands in a loop with a delay between every run and looges the output to a file
+ *
+ * copyright 2023 
+ * Andreas H. <andi@blafasl.de>
+ *
+ */
+
+; define commands to execute here
+; number of commands
+com_count = 1
+strdim commands com_count
+; command array
+commands[0] = 'show clock'
+/*
+commands[1] = 'show session info'
+commands[2] = 'show running resource-monitor second last 60'
+commands[3] = 'show running resource-monitor minute last 10'
+commands[4] = 'debug dataplane pool statistics'
+commands[5] = 'show running resource-monitor ingress-backlogs'
+commands[6] = 'show counter global filter delta yes'
+commands[7] = 'show qos interface ae1 counter'
+*/
+
+; set log output filename
+; logfile = 'c:\temp\pa.log"
+; or save to desktop
+getspecialfolder logfile "Desktop"
+strconcat logfile '\palocli.log'
+
+; how many times to run the command loop
+times = 10
+
+; set delay between loops in seconds
+delay = 5
+
+; set prompt and prompt_regex only if autodetect doesn't work!
+; examples:
+; prompt = 'user@Hostname(active)> '
+: prompt_regex = '^user@Hostname\(active\)> $'
+prompt = ''
+prompt_regex = ''
+
+; ***********************************
+; ** do not change after this line **
+; ***********************************
+show 1
+
+; test if prompt autodetect
+strlen prompt
+p_len = result
+strlen prompt_regex
+pr_len = result
+
+if p_len = 0 || pr_len = 0 then
+
+	; get system prompt and build regex
+	sendln ''
+	waitregex '\w'
+	prompt = inputstr
+	prompt_regex = prompt
+	prompt_error = 0
+
+	strsplit prompt_regex '\'
+	if result <= 9 then
+		strjoin prompt_regex '\\' result
+	else
+		prompt_error = 1
+	endif
+
+	strsplit prompt_regex '('
+	if result <= 9 then
+		strjoin prompt_regex '\(' result
+	else
+		prompt_error = 1
+	endif
+
+	strsplit prompt_regex ')'
+	if result <= 9 then
+		strjoin prompt_regex '\)' result
+	else
+		prompt_error = 1
+	endif
+
+	strsplit prompt_regex '.'
+	if result <= 9 then
+		strjoin prompt_regex '\.' result
+	else
+		prompt_error = 1
+	endif
+
+	strsplit prompt_regex '?'
+	if result <= 9 then
+		strjoin prompt_regex '\?' result
+	else
+		prompt_error = 1
+	endif
+
+	strsplit prompt_regex '+'
+	if result <= 9 then
+		strjoin prompt_regex '\+' result
+	else
+		prompt_error = 1
+	endif
+
+	strsplit prompt_regex '*'
+	if result <= 9 then
+		strjoin prompt_regex '\*' result
+	else
+		prompt_error = 1
+	endif
+
+	strsplit prompt_regex '{'
+	if result <= 9 then
+		strjoin prompt_regex '\{' result
+	else
+		prompt_error = 1
+	endif
+
+	strsplit prompt_regex '}'
+	if result <= 9 then
+		strjoin prompt_regex '\}' result
+	else
+		prompt_error = 1
+	endif
+
+	strsplit prompt_regex '['
+	if result <= 9 then
+		strjoin prompt_regex '\[' result
+	else
+		prompt_error = 1
+	endif
+
+	strsplit prompt_regex ']'
+	if result <= 9 then
+		strjoin prompt_regex '\]' result
+	else
+		prompt_error = 1
+	endif
+
+	strinsert prompt_regex 1 '^'
+	strconcat prompt_regex '$'
+
+	if prompt_error = 1 then
+		messagebox 'Error in prompt autdetect!'#10'Set manually!'#10#10'Quit now...' 'Error!'
+		end
+	endif
+
+endif
+
+; disable pager
+sendln 'set cli pager off'
+waitregex prompt_regex
+
+; start logging
+logopen logfile 0 0 1 0 0 0
+
+logwrite '*****************************************************'#13#10
+logwrite '**                 Start Logging                   **'#13#10
+logwrite '*****************************************************'#13#10
+logwrite #13#10
+logwrite '+-----------------+'#13#10
+logwrite '| show systeminfo |'#13#10
+logwrite '+-----------------+'#13#10
+
+logpause
+sendln 'show system info'
+waitregex 'show system info'
+logstart
+waitregex prompt_regex
+
+count = 1
+while count <= times
+
+	logwrite #13#10
+	logwrite     '*****************************************************'#13#10
+	sprintf2 msg '**                   Start Loop %-3d                **' count
+	logwrite msg
+	logwrite #13#10
+	logwrite '*****************************************************'#13#10
+
+
+	; iterate commands array
+    for com 0 com_count - 1
+	
+		command = commands[com]
+		;build box header/footer
+		box = '+-'
+		strlen command
+		for len 1 result
+			strconcat box '-'
+		next
+		strconcat box '-+'
+		;build box message
+		sprintf2 msg '| %s |' command
+		;write box
+		logwrite #13#10
+		logwrite box
+		logwrite #13#10
+		logwrite msg
+		logwrite #13#10
+		logwrite box
+		logwrite #13#10
+
+		;write prompt to log
+		logpause
+		;build prompt + command
+		prompt_command = prompt
+		strconcat prompt_command command
+		logwrite prompt_command
+		logwrite #13#10
+		logwrite #13#10
+		;execute command
+		sendln command
+		;wait for command prompt
+		waitregex command
+		;log output
+		logstart
+		;wait for output to finish
+		waitregex prompt_regex
+		logwrite #13#10
+	
+	;execute next command
+	next
+	
+	;delay between iterations
+	pause delay
+
+	count = count + 1
+endwhile
+
+logclose
+
+end
